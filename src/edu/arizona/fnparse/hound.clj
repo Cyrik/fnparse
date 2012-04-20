@@ -2,18 +2,33 @@
   "This is *FnParse Hound*, which can create unambiguous
   LL(1) or LL(n) parsers."
   (:require [edu.arizona.fnparse [core :as c]]
-            [clojure.contrib [monads :as m] [def :as d] [seq :as seq]
-                             [except :as except] [core :as cljcore]]
+            [clojure.algo.monads :as m]
             [clojure [template :as t] [set :as set]])
   (:import java.util.Scanner)
   (:refer-clojure :rename {mapcat seq-mapcat, when if-when, + num+}
                   :exclude #{for peek find}))
 
-(d/defalias match c/match)
-(d/defalias find c/find)
-(d/defalias substitute c/substitute)
-(d/defalias substitute-1 c/substitute-1)
-(d/defalias format-parse-error c/format-parse-error)
+;(d/defalias match c/match)
+;(d/defalias find c/find)
+;(d/defalias substitute c/substitute)
+;(d/defalias substitute-1 c/substitute-1)
+;(d/defalias format-parse-error c/format-parse-error)
+(defn separate
+  "Returns a vector:
+   [ (filter f s), (filter (complement f) s) ]"
+  [f s]
+  [(filter f s) (filter (complement f) s)])
+
+(defn seqable?
+  "Returns true if (seq x) will succeed, false otherwise."
+  [x]
+  (or (seq? x)
+      (instance? clojure.lang.Seqable x)
+      (nil? x)
+      (instance? Iterable x)
+      (-> x .getClass .isArray)
+      (string? x)
+      (instance? java.util.Map x)))
 
 (defn rule?
   "Tests if the given object is a Hound Rule, or a var containing a Hound Rule."
@@ -177,9 +192,7 @@
      (c/make-failure
        (c/make-parse-error (:position state) (:location state) descriptors)))))
 
-(d/defvar nothing-descriptors
-  #{(c/make-label-descriptor "absolutely nothing")}
-  "The error descriptors that `<nothing>` uses.")
+(def nothing-descriptors (c/make-label-descriptor "absolutely nothing"))
 
 (defrule <nothing>
   "The general failing rule.
@@ -324,7 +337,7 @@
       (let [[consuming-replies empty-replies]
               (->> rules
                 (map #(c/apply % state))
-                (seq/separate :tokens-consumed?))]
+                (separate :tokens-consumed?))]
         (if (empty? consuming-replies)
           (if (empty? empty-replies)
             (c/apply <nothing> state)
@@ -581,7 +594,7 @@
   "Creates a terminal rule with a set.
   A shortcut for `(term l (set tokens))`."
   [l tokens]
-  {:pre #{(cljcore/seqable? tokens)}}
+  {:pre #{(seqable? tokens)}}
   (term l (set tokens)))
 
 (defmaker antiset-term
@@ -705,7 +718,7 @@
                   (-> last-success :result force
                     (assoc :error (-> first-failure :result force :error)))))))
           (if (-> first-reply :result force c/success?)
-            (except/throwf "empty rules cannot be greedily repeated")
+            (throw (Exception. "empty rules cannot be greedily repeated"))
             first-reply))))))
 
 (defmaker hooked-rep
@@ -773,7 +786,7 @@
   Use the `phrase` function instead of this
   function when `f` is just `lit`."
   [f & token-colls]
-  {:pre #{(ifn? f) (every? cljcore/seqable? token-colls)}}
+  {:pre #{(ifn? f) (every? seqable? token-colls)}}
   (->> token-colls (apply map f) (apply cat)))
 
 (defmaker mapsum
@@ -782,7 +795,7 @@
   Use the `set-term` function instead of this
   function when `f` is just `lit`."
   [f & token-colls]
-  {:pre #{(ifn? f) (every? cljcore/seqable? token-colls)}}
+  {:pre #{(ifn? f) (every? seqable? token-colls)}}
   (->> token-colls (apply map f) (apply +)))
 
 (defmaker phrase

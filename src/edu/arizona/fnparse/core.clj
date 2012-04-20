@@ -3,10 +3,18 @@
   common to both FnParse Hound and FnParse Cat. It is
   *not* intended for end-users' usage."
   {:author "Joshua Choi", :skip-wiki true}
-  (:require [clojure.contrib [def :as d] [except :as except]]
-            [clojure [string :as str] [template :as temp] [set :as set]]
-            [edu.arizona.fnparse.core-private :as cp])
+  (:require 
+            [clojure [string :as str] [template :as temp] [set :as set]])
   (:refer-clojure :rename {apply apply-seq}, :exclude #{find}))
+
+(defmacro defvar
+  "Defines a var with an optional intializer and doc string"
+  ([name]
+     (list `def name))
+  ([name init]
+     (list `def name init))
+  ([name init doc]
+     (list `def (with-meta name (assoc (meta name) :doc doc)) init)))
 
 (defprotocol AState
   "The protocol of FnParse states, which must
@@ -64,7 +72,7 @@
 (defn require-rule-labels
   "Throws an exception if the given `<r>` is not labelled."
   [<r>]
-  (or (rule-labels <r>) (except/throw-arg "rule must be labelled")))
+  (or (rule-labels <r>) (throw (IllegalArgumentException. "rule must be labelled"))) )
 
 (defn- join-labels
   "Joins the given collection of `labels` into a single string."
@@ -232,10 +240,11 @@
   (format "[%s] %s" (location-code (or (:location warning) (:position warning)))
                     (:message warning)))
 
-(d/defvar *format-remainder-limit*
+;"The limit at which `format-remainder`will cut off lengthy
+;  remainders at. Must be a positive integer."
+(def ^:dynamic *format-remainder-limit*
   10
-  "The limit at which `format-remainder`will cut off lengthy
-  remainders at. Must be a positive integer.")
+  )
 
 (defn format-remainder [string-input? subinput]
   {:pre #{(seq subinput) (pos? *format-remainder-limit*)
@@ -430,19 +439,19 @@ Error: %s
 
 (defn substitute-1
   "Substitutes the first occurence of a rule in a sequence of
-  tokens with its respective product. Returns a lazy sequence
+  kens with its respective product. Returns a lazy sequence
   of tokens and products.
   
   See `substitute`'s docs for information on `flatten?`."
   [state rule & {:keys #{flatten?}}]
   (substitute-1* rule (get-combining-fn flatten?) state))
 
-(d/defvar- rule-doc-summary-header
+(defvar rule-doc-summary-header
   "\n
   Rule Summary
   ============")
 
-(d/defvar- rule-doc-info
+(defvar rule-doc-info
   {:succeeds "Success"
    :product "Product"
    :consumes "Consumes"
@@ -501,7 +510,7 @@ Error: %s
          (or (string? doc-string) (nil? doc-string))
          (or (map? meta-opts) (nil? meta-opts))]}
  `(let [rule# (make-named-rule-wrapper ~type ~form)
-        rule-var# (d/defvar ~rule-sym rule# ~doc-string)]
+        rule-var# (defvar ~rule-sym rule# ~doc-string)]
     (alter-meta! rule-var# update-in [:doc]
       rule-doc-str ~meta-opts ~description)
     rule-var#))
